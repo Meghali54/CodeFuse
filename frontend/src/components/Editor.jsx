@@ -111,15 +111,17 @@ const Editor = ({ setUsers }) => {
     const loadSession = async () => {
       try {
         const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/sessions/${roomId}`);
-        if (response.data) {
+        if (response.data && response.data.success !== false) {
           setCode(response.data.code || '/*write your code here !!!*/');
           codeRef.current = response.data.code || '/*write your code here !!!*/';
           setLanguage(response.data.language || 'javascript');
           languageRef.current = response.data.language || 'javascript';
           toast.success('Session loaded!');
+        } else {
+          console.log('No existing session found, starting fresh');
         }
       } catch (error) {
-        console.log('No existing session found, starting fresh');
+        console.log('Error loading session', error);
       }
     };
 
@@ -159,10 +161,10 @@ const Editor = ({ setUsers }) => {
   useEffect(() => {
     const handleError = (err) => {
       console.log('socket error:', err)
-      toast.error('Socket connection failed')
-      navigate('/')
+      // toast.error('Socket connection failed') // suppression: too noisy
     }
 
+    if (socketRef.current) return;
     socketRef.current = initSocket()
 
     socketRef.current.on('connect_error', handleError)
@@ -170,6 +172,7 @@ const Editor = ({ setUsers }) => {
 
     socketRef.current.on('connect', () => {
       console.log('socket connected:', socketRef.current.id)
+      toast.success('Connected to server')
 
       socketRef.current.emit('join', {
         roomId,
@@ -274,7 +277,7 @@ const Editor = ({ setUsers }) => {
   }, [])
 
   if (!location.state) {
-    return <Navigate to="/" />
+    return <Navigate to="/" state={{ roomId }} />
   }
 
   const handleCodeChange = (newCode) => {

@@ -15,7 +15,7 @@ app.use(cors({
 
 
 const server = createServer(app);
-const io = new Server(server,{
+const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
@@ -36,7 +36,7 @@ app.post('/api/sessions', (req, res) => {
   if (!roomId || !sessionName) {
     return res.status(400).json({ error: 'roomId and sessionName required' });
   }
-  
+
   sessionStore[roomId] = {
     roomId,
     sessionName,
@@ -45,18 +45,18 @@ app.post('/api/sessions', (req, res) => {
     createdAt: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
   };
-  
+
   res.json({ success: true, session: sessionStore[roomId] });
 });
 
 app.get('/api/sessions/:roomId', (req, res) => {
   const { roomId } = req.params;
   const session = sessionStore[roomId];
-  
+
   if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
+    return res.json({ success: false, message: 'Session not found' });
   }
-  
+
   res.json(session);
 });
 
@@ -73,15 +73,15 @@ app.get('/api/sessions', (req, res) => {
 app.put('/api/sessions/:roomId', (req, res) => {
   const { roomId } = req.params;
   const { code, language } = req.body;
-  
+
   if (!sessionStore[roomId]) {
     return res.status(404).json({ error: 'Session not found' });
   }
-  
+
   if (code !== undefined) sessionStore[roomId].code = code;
   if (language !== undefined) sessionStore[roomId].language = language;
   sessionStore[roomId].lastUpdated = new Date().toISOString();
-  
+
   res.json({ success: true, session: sessionStore[roomId] });
 });
 
@@ -110,14 +110,14 @@ const pickColor = (socketId) => {
 };
 
 const getAllConnectedClients = (roomId) => {
-  return  Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
-     (socketId) => {
+  return Array.from(io.sockets.adapter.rooms.get(roomId) || []).map(
+    (socketId) => {
       return {
         socketId,
-        username :userSocketMap[socketId]?.username,
+        username: userSocketMap[socketId]?.username,
         color: userSocketMap[socketId]?.color,
       }
-     }
+    }
   ) //
 }
 
@@ -178,28 +178,28 @@ io.on("connection", (socket) => {
     console.log(`user disconnected : ${socket.id}`);
   });
 
-  
+
   //code sync logic
-  socket.on("code-change",({roomId,code})=>{
+  socket.on("code-change", ({ roomId, code }) => {
     // console.log("code recieve dfrom" , roomId);
     // console.log("code length ", code.length)
-     socket.to(roomId).emit("code-changed", { code });
-     
-     // Persist to session if exists
-     if (sessionStore[roomId]) {
-       sessionStore[roomId].code = code;
-       sessionStore[roomId].lastUpdated = new Date().toISOString();
-     }
+    socket.to(roomId).emit("code-changed", { code });
+
+    // Persist to session if exists
+    if (sessionStore[roomId]) {
+      sessionStore[roomId].code = code;
+      sessionStore[roomId].lastUpdated = new Date().toISOString();
+    }
   })
 
   // here i listend to the new joinee and sending the code to him
-  socket.on("sync-state",({code, language, socketId})=>{
+  socket.on("sync-state", ({ code, language, socketId }) => {
     io.to(socketId).emit("sync-state", { code, language });
   })
 
   socket.on("language-change", ({ roomId, language }) => {
     socket.to(roomId).emit("language-changed", { language });
-    
+
     // Persist to session if exists
     if (sessionStore[roomId]) {
       sessionStore[roomId].language = language;
@@ -225,6 +225,15 @@ io.on("connection", (socket) => {
 });
 
 
+
+// Fallback for unknown routes - helpful for users accessing backend port by mistake
+app.use((req, res) => {
+  res.status(404).send(`
+    <h1>404 - Not Found</h1>
+    <p>You are accessing the Backend Server (Port ${process.env.PORT || 3000}).</p>
+    <p>Please access the Frontend Application at: <a href="http://localhost:5173">http://localhost:5173</a> or the port shown in your terminal.</p>
+  `);
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {

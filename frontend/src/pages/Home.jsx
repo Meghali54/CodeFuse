@@ -3,17 +3,26 @@ import editorImg from "../assets/editor.svg";
 import axios from 'axios';
 import { v4 as uuidv4 } from 'uuid';
 import { ToastContainer, toast } from 'react-toastify';
-import {useNavigate} from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 
 const Home = () => {
 
   const navigate = useNavigate();
 
-  const [roomId , setRoomId]  = useState('');
+  const [roomId, setRoomId] = useState('');
   const [username, setUsername] = useState('');
   const [savedSessions, setSavedSessions] = useState([]);
   const [showSavedSessions, setShowSavedSessions] = useState(false);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    if (location.state?.roomId) {
+      setRoomId(location.state.roomId);
+      toast.info("Join room to continue");
+    }
+  }, [location.state]);
 
   useEffect(() => {
     loadSessions();
@@ -34,15 +43,15 @@ const Home = () => {
     setRoomId(id);
     toast.success("Room created");
   }
-   const isFormFilled =  roomId.trim() !== "" && username.trim() !== "";
+  const isFormFilled = roomId.trim() !== "" && username.trim() !== "";
 
-  const joinRoom = ()=>{
-    if(!roomId || !username){
+  const joinRoom = () => {
+    if (!roomId || !username) {
       toast.error("Put both fields");
       return;
     }
-    navigate(`/editorpage/${roomId}`,{
-      state:{
+    navigate(`/editorpage/${roomId}`, {
+      state: {
         username
       }
     })
@@ -50,12 +59,12 @@ const Home = () => {
   }
 
   const joinSession = (sessionRoomId) => {
-    if(!username.trim()){
+    if (!username.trim()) {
       toast.error("Please enter your username first");
       return;
     }
-    navigate(`/editorpage/${sessionRoomId}`,{
-      state:{
+    navigate(`/editorpage/${sessionRoomId}`, {
+      state: {
         username
       }
     })
@@ -63,11 +72,11 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-950 via-zinc-900 to-indigo-950 flex items-center justify-center p-4">
-      
+
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDE2YzAgMS4xLS45IDItMiAycy0yLS45LTItMiAuOS0yIDItMiAyIC45IDIgMm0tNiAwYzAgMS4xLS45IDItMiAycy0yLS45LTItMiAuOS0yIDItMiAyIC45IDIgMiIvPjwvZz48L2c+PC9zdmc+')] opacity-30" />
-      
+
       <div className="w-full max-w-6xl relative z-10 grid md:grid-cols-2 gap-8">
-        
+
         {/* Left Panel - Branding & Info */}
         <div className="flex flex-col justify-center space-y-8 text-white">
           <div>
@@ -125,7 +134,7 @@ const Home = () => {
 
         {/* Right Panel - Form */}
         <div className="bg-zinc-900/80 backdrop-blur-xl border border-zinc-800 p-8 rounded-3xl shadow-2xl">
-          
+
           <div className="space-y-6">
             <div>
               <h2 className="text-2xl font-bold text-white mb-2">Get Started</h2>
@@ -140,7 +149,7 @@ const Home = () => {
                   placeholder="Enter your name"
                   className='w-full bg-zinc-800 text-white py-3 px-4 rounded-xl border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all'
                   value={username}
-                  onChange={(e)=> setUsername(e.target.value)}
+                  onChange={(e) => setUsername(e.target.value)}
                 />
               </div>
 
@@ -151,24 +160,23 @@ const Home = () => {
                   placeholder="Enter or create room ID"
                   className='w-full bg-zinc-800 text-white py-3 px-4 rounded-xl border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all'
                   value={roomId}
-                  onChange={(e)=> setRoomId(e.target.value)}
+                  onChange={(e) => setRoomId(e.target.value)}
                 />
               </div>
             </div>
 
             <div className="space-y-3">
               <button
-                className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 ${
-                  isFormFilled
-                    ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/30"
-                    : "bg-zinc-700 text-zinc-400 cursor-not-allowed"
-                }`}
+                className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 ${isFormFilled
+                  ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white shadow-lg shadow-indigo-500/30"
+                  : "bg-zinc-700 text-zinc-400 cursor-not-allowed"
+                  }`}
                 disabled={!isFormFilled}
                 onClick={joinRoom}
               >
                 Join Room
               </button>
-              
+
               <button
                 className="w-full border-2 border-zinc-700 hover:border-indigo-500 py-3 rounded-xl font-semibold text-white hover:bg-zinc-800 transition-all duration-200"
                 onClick={createRoomId}
