@@ -4,6 +4,11 @@ import { fileURLToPath } from 'node:url';
 import { dirname } from 'node:path';
 import path from 'node:path';
 import { Server } from 'socket.io';
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+import userRoutes from './routes/userRoutes.js';
+
+dotenv.config();
 
 import cors from "cors";
 const app = express();
@@ -12,7 +17,10 @@ app.use(cors({
   origin: "*",
 }));
 
-
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('MongoDB connected'))
+  .catch(err => console.log('MongoDB connection error:', err));
 
 const server = createServer(app);
 const io = new Server(server, {
@@ -26,6 +34,9 @@ const io = new Server(server, {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 app.use(express.json());
+
+// Routes
+app.use('/api/users', userRoutes);
 
 // serve frontend
 app.use(express.static(path.join(__dirname, 'public')));
@@ -239,4 +250,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log(`server is running at port : ${PORT}`);
 });
-

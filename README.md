@@ -110,6 +110,9 @@ http://localhost:5173
 
 ```
 PORT=3000
+MONGO_URI=mongodb://username:password@localhost:27017/codefuse
+JWT_SECRET=your_jwt_secret_key
+
 ```
 
 **Frontend** (create `.env` in `frontend/` folder)
