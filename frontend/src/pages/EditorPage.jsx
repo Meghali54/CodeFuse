@@ -4,6 +4,7 @@ import User from "../components/User";
 import Editor from "../components/Editor";
 import CodeMirrorEditor from "../components/CodeMirrorEditor";
 import SessionManager from "../components/SessionManager";
+import AuthModal from "../components/AuthModal";
 import { toast } from "react-toastify";
 
 import { useParams, useNavigate } from "react-router-dom";
@@ -11,6 +12,7 @@ import { useParams, useNavigate } from "react-router-dom";
 const EditorPage = () => {
   const [users, setUsers] = useState([]);
   const [showSessionManager, setShowSessionManager] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { roomId } = useParams();
   const navigate = useNavigate();
 
@@ -149,6 +151,27 @@ const EditorPage = () => {
             </svg>
             Leave Room
           </button>
+
+          <button
+            onClick={() => setIsAuthModalOpen(true)}
+            className="w-full flex items-center justify-center gap-2 border-2 border-zinc-700 hover:border-indigo-500 text-white py-3 rounded-xl font-semibold transition-all duration-200 hover:bg-zinc-800"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"
+              />
+            </svg>
+            Sign In
+          </button>
         </div>
       </div>
 
@@ -166,6 +189,11 @@ const EditorPage = () => {
           onClose={() => setShowSessionManager(false)}
         />
       )}
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </div>
   );
 };
