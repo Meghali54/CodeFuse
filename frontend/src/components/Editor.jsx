@@ -4,6 +4,7 @@ import { initSocket } from '../socket'
 import { useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import axios from 'axios'
+import Select from './Select'
 
 // Load Monaco from CDN (optional, but good for performance)
 loader.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
@@ -34,10 +35,21 @@ const CodeEditor = ({ setUsers }) => {
 
   // Language mapping for Monaco
   const languageOptions = [
-    { key: 'javascript', label: 'JavaScript' },
-    { key: 'python', label: 'Python' },
-    { key: 'java', label: 'Java' },
-    { key: 'cpp', label: 'C++' },
+    { value: 'javascript', label: 'JavaScript' },
+    { value: 'python', label: 'Python' },
+    { value: 'java', label: 'Java' },
+    { value: 'cpp', label: 'C++' },
+    { value: 'typescript', label: 'TypeScript' },
+    { value: 'html', label: 'HTML' },
+    { value: 'css', label: 'CSS' },
+    { value: 'json', label: 'JSON' },
+    { value: 'go', label: 'Go' },
+    { value: 'rust', label: 'Rust' },
+    { value: 'php', label: 'PHP' },
+    { value: 'sql', label: 'SQL' },
+    { value: 'csharp', label: 'C#' },
+    { value: 'swift', label: 'Swift' },
+    { value: 'ruby', label: 'Ruby' },
   ]
 
   // --- Session Loading ---
@@ -303,14 +315,13 @@ const CodeEditor = ({ setUsers }) => {
     })
   }
 
-  const handleLanguageChange = (event) => {
-    const nextLanguage = event.target.value
-    setLanguage(nextLanguage)
-    languageRef.current = nextLanguage
+  const handleLanguageChange = (newLanguage) => {
+    setLanguage(newLanguage)
+    languageRef.current = newLanguage
 
     socketRef.current?.emit('language-change', {
       roomId,
-      language: nextLanguage,
+      language: newLanguage,
     })
   }
 
@@ -334,18 +345,15 @@ const CodeEditor = ({ setUsers }) => {
     <div className="h-full w-full flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4 text-sm text-white">
         <div className="flex items-center gap-3">
-          <span className="text-zinc-300">Language</span>
-          <select
-            value={language}
-            onChange={handleLanguageChange}
-            className="bg-zinc-900 text-white border border-zinc-700 rounded px-2 py-1"
-          >
-            {languageOptions.map((option) => (
-              <option key={option.key} value={option.key}>
-                {option.label}
-              </option>
-            ))}
-          </select>
+          <span className="text-zinc-300">Language:</span>
+          <div className="w-48">
+            <Select
+              options={languageOptions}
+              value={language}
+              onChange={handleLanguageChange}
+              placeholder="Select Language"
+            />
+          </div>
         </div>
         <span className="text-zinc-400">Monaco Editor · Real-time sync · Live cursors</span>
       </div>
