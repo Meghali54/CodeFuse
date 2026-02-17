@@ -1,170 +1,150 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import CodeMirror from '@uiw/react-codemirror'
-import { javascript } from '@codemirror/lang-javascript'
-import { python } from '@codemirror/lang-python'
-import { java } from '@codemirror/lang-java'
-import { cpp } from '@codemirror/lang-cpp'
-import { linter, lintGutter } from '@codemirror/lint'
-import { syntaxTree } from '@codemirror/language'
-import { EditorView, Decoration, WidgetType } from '@codemirror/view'
-import { StateEffect, StateField } from '@codemirror/state'
+import React, { useEffect, useRef, useState } from 'react'
+import Editor, { loader } from '@monaco-editor/react'
 import { initSocket } from '../socket'
 import { useNavigate, useLocation, useParams, Navigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import axios from 'axios'
 
-const languageOptions = [
-  { key: 'javascript', label: 'JavaScript', extension: javascript() },
-  { key: 'python', label: 'Python', extension: python() },
-  { key: 'java', label: 'Java', extension: java() },
-  { key: 'cpp', label: 'C++', extension: cpp() },
-]
+// Load Monaco from CDN (optional, but good for performance)
+loader.config({ paths: { vs: 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
 
-const syntaxErrorLinter = linter((view) => {
-  const diagnostics = []
-  const tree = syntaxTree(view.state)
-  tree.iterate({
-    enter: (node) => {
-      if (node.type.isError) {
-        const from = node.from
-        const to = Math.max(node.to, from + 1)
-        diagnostics.push({
-          from,
-          to,
-          severity: 'error',
-          message: 'Syntax error',
-        })
-      }
-    },
-  })
-  return diagnostics
-})
-
-class RemoteCursorWidget extends WidgetType {
-  constructor(username, color) {
-    super()
-    this.username = username
-    this.color = color
-  }
-
-  toDOM() {
-    const wrap = document.createElement('span')
-    wrap.style.position = 'relative'
-    wrap.style.borderLeft = `4px solid ${this.color}`
-    wrap.style.marginLeft = '-2px'
-    wrap.style.height = '1.7em'
-
-    const label = document.createElement('span')
-    label.textContent = this.username
-    label.style.position = 'absolute'
-    label.style.top = '-1.4em'
-    label.style.left = '-1px'
-    label.style.background = this.color
-    label.style.color = '#111827'
-    label.style.fontSize = '0.65rem'
-    label.style.padding = '2px 4px'
-    label.style.borderRadius = '4px'
-    label.style.whiteSpace = 'nowrap'
-
-    wrap.appendChild(label)
-    return wrap
-  }
-}
-
-const setRemoteCursorsEffect = StateEffect.define()
-
-const remoteCursorsField = StateField.define({
-  create() {
-    return Decoration.none
-  },
-  update(cursors, tr) {
-    for (const effect of tr.effects) {
-      if (effect.is(setRemoteCursorsEffect)) {
-        return effect.value
-      }
-    }
-    return cursors.map(tr.changes)
-  },
-  provide: (f) => EditorView.decorations.from(f),
-})
-
-const Editor = ({ setUsers }) => {
+const CodeEditor = ({ setUsers }) => {
   const socketRef = useRef(null)
-  const viewRef = useRef(null)
-  const location = useLocation()
+  const editorRef = useRef(null)
+  const monacoRef = useRef(null)
   const { roomId } = useParams()
+  const location = useLocation()
   const navigate = useNavigate()
+
+  // Refs for mute/state management to prevent loops
+  const isRemoteUpdate = useRef(false)
   const codeRef = useRef('')
   const languageRef = useRef('javascript')
-  const isRemoteUpdate = useRef(false)
+  const decorationsRef = useRef([])
   const selfColorRef = useRef('#94A3B8')
 
   const [code, setCode] = useState('/*write your code here !!!*/')
   const [language, setLanguage] = useState('javascript')
   const [messages, setMessages] = useState([])
   const [chatInput, setChatInput] = useState('')
+  // Store remote cursors: { [socketId]: { username, color, lineNumber, column } }
   const [remoteCursors, setRemoteCursors] = useState({})
 
   const username = location.state?.username
 
+  // Language mapping for Monaco
+  const languageOptions = [
+    { key: 'javascript', label: 'JavaScript' },
+    { key: 'python', label: 'Python' },
+    { key: 'java', label: 'Java' },
+    { key: 'cpp', label: 'C++' },
+  ]
+
+  // --- Session Loading ---
   useEffect(() => {
     const loadSession = async () => {
       try {
-        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/sessions/${roomId}`);
+        const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/sessions/${roomId}`)
         if (response.data && response.data.success !== false) {
-          setCode(response.data.code || '/*write your code here !!!*/');
-          codeRef.current = response.data.code || '/*write your code here !!!*/';
-          setLanguage(response.data.language || 'javascript');
-          languageRef.current = response.data.language || 'javascript';
-          toast.success('Session loaded!');
+          setCode(response.data.code || '/*write your code here !!!*/')
+          codeRef.current = response.data.code || '/*write your code here !!!*/'
+          setLanguage(response.data.language || 'javascript')
+          languageRef.current = response.data.language || 'javascript'
+          toast.success('Session loaded!')
         } else {
-          console.log('No existing session found, starting fresh');
+          console.log('No existing session found, starting fresh')
         }
       } catch (error) {
-        console.log('Error loading session', error);
+        console.log('Error loading session', error)
       }
-    };
+    }
+    loadSession()
+  }, [roomId])
 
-    loadSession();
-  }, [roomId]);
-
-  const currentLanguageExtension = useMemo(() => {
-    const selected = languageOptions.find((item) => item.key === language)
-    return selected ? selected.extension : javascript()
-  }, [language])
-
-  const updateRemoteDecorations = () => {
-    if (!viewRef.current) return
-
-    const decorations = []
-    Object.entries(remoteCursors).forEach(([socketId, cursorData]) => {
-      if (!cursorData?.cursor) return
-      const { head } = cursorData.cursor
-      const safeHead = Math.min(head, viewRef.current.state.doc.length)
-      decorations.push(
-        Decoration.widget({
-          widget: new RemoteCursorWidget(cursorData.username, cursorData.color),
-          side: 1,
-        }).range(safeHead)
-      )
-    })
-
-    viewRef.current.dispatch({
-      effects: setRemoteCursorsEffect.of(Decoration.set(decorations, true)),
-    })
-  }
-
+  // --- Cursor Rendering Logic ---
   useEffect(() => {
-    updateRemoteDecorations()
+    if (!editorRef.current || !monacoRef.current) return
+
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+
+    const newDecorations = []
+
+    Object.entries(remoteCursors).forEach(([socketId, cursorData]) => {
+      // Need a valid position
+      if (!cursorData.lineNumber || !cursorData.column) return
+
+      // Create a style for the cursor line/position
+      // We can use className for the cursor content or glyph margin
+      // Simplest approach for "cursor" in Monaco is adding a class 
+      // but Monaco doesn't support "arbitrary" HTML elements easily at text pos.
+      // We'll use:
+      // 1. className: background color for selection-like effect (or just a thin line if we can style it)
+      // 2. beforeContentClassName or afterContentClassName for the name tag
+
+      // Since we need dynamic colors, we must inject CSS or use a known set of classes.
+      // For simplicity/performance, let's inject a style tag for this user if needed, 
+      // or use a predefined color class if the palette is fixed. 
+      // The backend assigns colors from a palette.
+
+      const cursorColor = cursorData.color || '#94A3B8'
+      const cursorClass = `remote-cursor-${socketId}`
+      const labelClass = `remote-label-${socketId}`
+
+      // Inject dynamic CSS for this user's color
+      if (!document.getElementById(`style-${socketId}`)) {
+        const style = document.createElement('style')
+        style.id = `style-${socketId}`
+        style.innerHTML = `
+          .${cursorClass} {
+            border-left: 2px solid ${cursorColor};
+            margin-left: -1px;
+          }
+          .${labelClass}::after {
+            content: "${cursorData.username}";
+            position: absolute;
+            top: -1.2em;
+            left: 0;
+            background: ${cursorColor};
+            color: #111827;
+            font-size: 0.7rem;
+            padding: 2px 4px;
+            border-radius: 4px;
+            white-space: nowrap;
+            z-index: 10;
+          }
+        `
+        document.head.appendChild(style)
+      }
+
+      newDecorations.push({
+        range: new monaco.Range(
+          cursorData.lineNumber,
+          cursorData.column,
+          cursorData.lineNumber,
+          cursorData.column
+        ),
+        options: {
+          className: cursorClass, // The vertical line
+          afterContentClassName: labelClass, // The name tag
+          stickiness: monaco.editor.TrackedRangeStickiness.NeverGrowsWhenTypingAtEdges,
+        },
+      })
+    })
+
+    decorationsRef.current = editor.deltaDecorations(decorationsRef.current, newDecorations)
+
+    // Cleanup styles for disconnected users could be done, but minor leak for now.
+
   }, [remoteCursors])
 
+  // --- Socket Logic ---
   useEffect(() => {
     const handleError = (err) => {
       console.log('socket error:', err)
-      // toast.error('Socket connection failed') // suppression: too noisy
     }
 
-    if (socketRef.current) return;
+    if (socketRef.current) return
     socketRef.current = initSocket()
 
     socketRef.current.on('connect_error', handleError)
@@ -203,12 +183,20 @@ const Editor = ({ setUsers }) => {
     socketRef.current.on('disconnected', ({ clients, username: leftUser }) => {
       toast.info(`${leftUser} left`)
       setUsers(clients)
+
+      // Cleanup cursor styles if possible
+      // (Implementation detail found in many production apps: keep it simple)
     })
 
     socketRef.current.on('code-changed', ({ code }) => {
-      isRemoteUpdate.current = true
-      setCode(code)
-      codeRef.current = code
+      if (code !== codeRef.current) {
+        isRemoteUpdate.current = true
+        setCode(code)
+        codeRef.current = code
+        // For Monaco, setting value is handled by the component's `value` prop 
+        // OR we can directly call editor.setValue() if using uncontrolled.
+        // The @monaco-editor/react component handles `value` prop updates.
+      }
     })
 
     socketRef.current.on('sync-state', ({ code, language: syncedLanguage }) => {
@@ -241,9 +229,10 @@ const Editor = ({ setUsers }) => {
     })
 
     socketRef.current.on('cursor-change', ({ socketId, cursor, username: cursorUser, color }) => {
+      // Expecting cursor to be { lineNumber, column }
       setRemoteCursors((prev) => ({
         ...prev,
-        [socketId]: { cursor, username: cursorUser, color },
+        [socketId]: { ...cursor, username: cursorUser, color },
       }))
     })
 
@@ -253,48 +242,65 @@ const Editor = ({ setUsers }) => {
         delete updated[socketId]
         return updated
       })
+      // Remove style tag
+      const style = document.getElementById(`style-${socketId}`)
+      if (style) style.remove()
     })
 
     return () => {
       if (socketRef.current) {
         console.log('disconnecting socket:', socketRef.current.id)
-
-        socketRef.current.off('connect_error')
-        socketRef.current.off('connect_failed')
-        socketRef.current.off('joined')
-        socketRef.current.off('disconnected')
-        socketRef.current.off('code-changed')
-        socketRef.current.off('sync-state')
-        socketRef.current.off('language-changed')
-        socketRef.current.off('chat-message')
-        socketRef.current.off('cursor-change')
-        socketRef.current.off('cursor-removed')
-
         socketRef.current.disconnect()
         socketRef.current = null
       }
     }
-  }, [])
+  }, [roomId, username, setUsers])
 
   if (!location.state) {
     return <Navigate to="/" state={{ roomId }} />
   }
 
-  const handleCodeChange = (newCode) => {
-    codeRef.current = newCode
-    setCode(newCode)
+  // --- Handlers ---
 
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor
+    monacoRef.current = monaco
+
+    // Add cursor change listener
+    editor.onDidChangeCursorPosition((e) => {
+      const { position } = e
+      const cursor = {
+        lineNumber: position.lineNumber,
+        column: position.column
+      }
+
+      socketRef.current?.emit('cursor-change', {
+        roomId,
+        cursor,
+        username,
+        color: selfColorRef.current
+      })
+    })
+
+    // Add content change listener if not using onChange prop
+    // Actually the onChange prop is sufficient for code, 
+    // but let's stick to the props provided by the wrapper.
+  }
+
+  const handleEditorChange = (value, event) => {
+    // If update comes from remote, verify it's not a loop
     if (isRemoteUpdate.current) {
       isRemoteUpdate.current = false
       return
     }
 
-    if (socketRef.current) {
-      socketRef.current.emit('code-change', {
-        roomId,
-        code: newCode,
-      })
-    }
+    codeRef.current = value
+    setCode(value)
+
+    socketRef.current?.emit('code-change', {
+      roomId,
+      code: value,
+    })
   }
 
   const handleLanguageChange = (event) => {
@@ -302,12 +308,10 @@ const Editor = ({ setUsers }) => {
     setLanguage(nextLanguage)
     languageRef.current = nextLanguage
 
-    if (socketRef.current) {
-      socketRef.current.emit('language-change', {
-        roomId,
-        language: nextLanguage,
-      })
-    }
+    socketRef.current?.emit('language-change', {
+      roomId,
+      language: nextLanguage,
+    })
   }
 
   const handleSendMessage = (event) => {
@@ -326,34 +330,6 @@ const Editor = ({ setUsers }) => {
     setChatInput('')
   }
 
-  const cursorListener = useMemo(
-    () =>
-      EditorView.updateListener.of((update) => {
-        if (!update.selectionSet || !socketRef.current) return
-        const { anchor, head } = update.state.selection.main
-
-        socketRef.current.emit('cursor-change', {
-          roomId,
-          cursor: { anchor, head },
-          username,
-          color: selfColorRef.current,
-        })
-      }),
-    [roomId, username]
-  )
-
-  const extensions = useMemo(
-    () => [
-      currentLanguageExtension,
-      lintGutter(),
-      syntaxErrorLinter,
-      cursorListener,
-      remoteCursorsField,
-      EditorView.lineWrapping,
-    ],
-    [currentLanguageExtension, cursorListener]
-  )
-
   return (
     <div className="h-full w-full flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4 text-sm text-white">
@@ -371,21 +347,24 @@ const Editor = ({ setUsers }) => {
             ))}
           </select>
         </div>
-        <span className="text-zinc-400">Real-time sync · Live cursors · Linting</span>
+        <span className="text-zinc-400">Monaco Editor · Real-time sync · Live cursors</span>
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden">
         <div className="flex-1 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
-          <CodeMirror
-            value={code}
+          <Editor
             height="100%"
-            extensions={extensions}
-            onChange={handleCodeChange}
-            onCreateEditor={(view) => {
-              viewRef.current = view
-              updateRemoteDecorations()
+            language={language}
+            value={code}
+            theme="vs-dark"
+            onChange={handleEditorChange}
+            onMount={handleEditorDidMount}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 14,
+              wordWrap: 'on',
+              automaticLayout: true,
             }}
-            theme="dark"
           />
         </div>
 
@@ -438,4 +417,4 @@ const Editor = ({ setUsers }) => {
   )
 }
 
-export default Editor
+export default CodeEditor
