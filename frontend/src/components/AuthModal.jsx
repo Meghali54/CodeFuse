@@ -2,9 +2,13 @@ import React, { useState } from 'react';
 import Modal from './Modal';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { Eye, EyeOff } from "lucide-react";
 
 const AuthModal = ({ isOpen, onClose }) => {
     const [activeTab, setActiveTab] = useState('login'); // 'login' or 'signup'
+
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
     // Form State
     const [email, setEmail] = useState('');
@@ -31,7 +35,7 @@ const AuthModal = ({ isOpen, onClose }) => {
 
             console.log(payload);
             const response = await axios.post(endpoint, payload);
-            
+
 
             if (response.data.success) {
                 localStorage.setItem('token', response.data.token);
@@ -64,8 +68,8 @@ const AuthModal = ({ isOpen, onClose }) => {
             <div className="flex p-1 bg-zinc-800/50 rounded-xl mb-6">
                 <button
                     className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'login'
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'text-zinc-400 hover:text-white'
+                        ? 'bg-indigo-600 text-white shadow-lg'
+                        : 'text-zinc-400 hover:text-white'
                         }`}
                     onClick={() => switchTab('login')}
                 >
@@ -73,8 +77,8 @@ const AuthModal = ({ isOpen, onClose }) => {
                 </button>
                 <button
                     className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === 'signup'
-                            ? 'bg-indigo-600 text-white shadow-lg'
-                            : 'text-zinc-400 hover:text-white'
+                        ? 'bg-indigo-600 text-white shadow-lg'
+                        : 'text-zinc-400 hover:text-white'
                         }`}
                     onClick={() => switchTab('signup')}
                 >
@@ -110,28 +114,60 @@ const AuthModal = ({ isOpen, onClose }) => {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">Password</label>
-                    <input
-                        type="password"
-                        required
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                        placeholder="••••••••"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                        Password
+                    </label>
+
+                    <div className="relative">
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            required
+                            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-2.5 pr-12 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                            placeholder="••••••••"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                        />
+
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                        >
+                            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                        </button>
+                    </div>
                 </div>
 
                 {activeTab === 'signup' && (
                     <div>
-                        <label className="block text-sm font-medium text-zinc-300 mb-1.5">Confirm Password</label>
-                        <input
-                            type="password"
-                            required
-                            className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
-                            placeholder="••••••••"
-                            value={confirmPassword}
-                            onChange={(e) => setConfirmPassword(e.target.value)}
-                        />
+                        <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                            Confirm Password
+                        </label>
+
+                        <div className="relative">
+                            <input
+                                type={showConfirmPassword ? "text" : "password"}
+                                required
+                                className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-2.5 pr-12 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all"
+                                placeholder="••••••••"
+                                value={confirmPassword}
+                                onChange={(e) => setConfirmPassword(e.target.value)}
+                            />
+
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    setShowConfirmPassword(!showConfirmPassword)
+                                }
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white"
+                            >
+                                {showConfirmPassword ? (
+                                    <EyeOff size={18} />
+                                ) : (
+                                    <Eye size={18} />
+                                )}
+                            </button>
+                        </div>
                     </div>
                 )}
 
