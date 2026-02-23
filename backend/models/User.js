@@ -14,9 +14,17 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true,
         minlength: 6,
     },
+    authProvider: {
+        type: String,
+        default: 'local'
+    },
+    googleId: {
+        type: String,
+        sparse: true,
+        unique: true
+    }
 }, { timestamps: true });
 
 const User = mongoose.model("User", userSchema);

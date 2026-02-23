@@ -25,11 +25,41 @@ const Home = () => {
   }, [location.state]);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-      setUsername(JSON.parse(storedUser).username);
-    }
+    const handleOAuthToken = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const token = urlParams.get('token');
+
+      if (token) {
+        localStorage.setItem('token', token);
+        // Clean URL to remove token
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        try {
+          const response = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/users/me`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+
+          if (response.data.success) {
+            localStorage.setItem('user', JSON.stringify(response.data.user));
+            setUser(response.data.user);
+            setUsername(response.data.user.username);
+            toast.success(`Welcome, ${response.data.user.username}!`);
+          }
+        } catch (error) {
+          console.error('Failed to fetch user:', error);
+          toast.error("Authentication failed. Please try again.");
+          localStorage.removeItem('token');
+        }
+      } else {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          setUser(JSON.parse(storedUser));
+          setUsername(JSON.parse(storedUser).username);
+        }
+      }
+    };
+
+    handleOAuthToken();
     loadSessions();
   }, []);
 

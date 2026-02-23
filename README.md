@@ -112,6 +112,10 @@ http://localhost:5173
 PORT=3000
 MONGO_URI=mongodb://username:password@localhost:27017/codefuse
 JWT_SECRET=your_jwt_secret_key
+CLIENT_URL=http://localhost:5173
+GOOGLE_CLIENT_ID=google_client_id
+GOOGLE_CLIENT_SECRET=google_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3000/api/oauth/callback/google
 
 ```
 
