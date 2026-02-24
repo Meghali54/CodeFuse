@@ -60,8 +60,14 @@ app.post("/api/sessions", (req, res) => {
   sessionStore[roomId] = {
     roomId,
     sessionName,
-    code: "",
-    language: "javascript",
+    files: [
+      {
+        id: 'default',
+        name: 'main.js',
+        code: '// Write your code here',
+        language: 'javascript'
+      }
+    ],
     createdAt: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
   };
@@ -92,14 +98,13 @@ app.get("/api/sessions", (req, res) => {
 
 app.put("/api/sessions/:roomId", (req, res) => {
   const { roomId } = req.params;
-  const { code, language } = req.body;
+  const { files } = req.body;
 
   if (!sessionStore[roomId]) {
     return res.status(404).json({ error: "Session not found" });
   }
 
-  if (code !== undefined) sessionStore[roomId].code = code;
-  if (language !== undefined) sessionStore[roomId].language = language;
+  if (files !== undefined) sessionStore[roomId].files = files;
   sessionStore[roomId].lastUpdated = new Date().toISOString();
 
   res.json({ success: true, session: sessionStore[roomId] });
@@ -303,26 +308,50 @@ io.on("connection", (socket) => {
     console.log(`user disconnected : ${socket.id}`);
   });
 
-  // Code Sync
-  socket.on("code-change", ({ roomId, code }) => {
-    socket.to(roomId).emit("code-changed", { code });
+  // Code Sync - Updated for files
+  socket.on("file-change", ({ roomId, fileId, code }) => {
+    socket.to(roomId).emit("file-changed", { fileId, code });
 
     if (sessionStore[roomId]) {
-      sessionStore[roomId].code = code;
+      const fileIndex = sessionStore[roomId].files.findIndex(f => f.id === fileId);
+      if (fileIndex !== -1) {
+        sessionStore[roomId].files[fileIndex].code = code;
+        sessionStore[roomId].lastUpdated = new Date().toISOString();
+      }
+    }
+  });
+
+  socket.on("sync-state", ({ files, activeFile, socketId }) => {
+    io.to(socketId).emit("files-synced", { files, activeFile });
+  });
+
+  socket.on("file-create", ({ roomId, file }) => {
+    socket.to(roomId).emit("file-created", { file });
+
+    if (sessionStore[roomId]) {
+      sessionStore[roomId].files.push(file);
       sessionStore[roomId].lastUpdated = new Date().toISOString();
     }
   });
 
-  socket.on("sync-state", ({ code, language, socketId }) => {
-    io.to(socketId).emit("sync-state", { code, language });
-  });
-
-  socket.on("language-change", ({ roomId, language }) => {
-    socket.to(roomId).emit("language-changed", { language });
+  socket.on("file-delete", ({ roomId, fileId }) => {
+    socket.to(roomId).emit("file-deleted", { fileId });
 
     if (sessionStore[roomId]) {
-      sessionStore[roomId].language = language;
+      sessionStore[roomId].files = sessionStore[roomId].files.filter(f => f.id !== fileId);
       sessionStore[roomId].lastUpdated = new Date().toISOString();
+    }
+  });
+
+  socket.on("file-rename", ({ roomId, fileId, newName }) => {
+    socket.to(roomId).emit("file-renamed", { fileId, newName });
+
+    if (sessionStore[roomId]) {
+      const fileIndex = sessionStore[roomId].files.findIndex(f => f.id === fileId);
+      if (fileIndex !== -1) {
+        sessionStore[roomId].files[fileIndex].name = newName;
+        sessionStore[roomId].lastUpdated = new Date().toISOString();
+      }
     }
   });
 
@@ -338,14 +367,15 @@ io.on("connection", (socket) => {
     },
   );
 
-  socket.on("cursor-change", ({ roomId, cursor, username, color }) => {
-    cursorMap[socket.id] = { cursor, username, color };
+  socket.on("cursor-change", ({ roomId, cursor, username, color, fileId }) => {
+    cursorMap[socket.id] = { cursor, username, color, fileId };
 
     socket.to(roomId).emit("cursor-change", {
       socketId: socket.id,
       cursor,
       username,
       color,
+      fileId,
     });
   });
 });

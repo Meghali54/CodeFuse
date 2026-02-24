@@ -1,0 +1,12 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start MongoDB Docker",
+			"type": "shell",
+			"command": "docker-compose up -d",
+			"isBackground": false,
+			"group": "build"
+		}
+	]
+}

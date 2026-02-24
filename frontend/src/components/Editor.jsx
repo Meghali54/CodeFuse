@@ -5,7 +5,14 @@ import { useLocation, useParams, Navigate, useNavigate } from "react-router-dom"
 import { toast } from "react-toastify";
 import axios from "axios";
 import Select from "./Select";
+import FileExplorer from "./FileExplorer";
 import { customThemes } from "../constants/customThemes";
+import { 
+  getLanguageFromFilename, 
+  generateFileId, 
+  isValidFilename,
+  getDefaultTemplate 
+} from "../utils/fileUtils";
 
 // Load Monaco from CDN (optional, but good for performance)
 loader.config({
@@ -22,41 +29,27 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
   // Refs for mute/state management to prevent loops
   const isRemoteUpdate = useRef(false);
-  const codeRef = useRef("");
-  const languageRef = useRef("javascript");
+  const filesRef = useRef([{ id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }]);
+  const activeFileRef = useRef('default');
   const decorationsRef = useRef([]);
   const selfColorRef = useRef("#94A3B8");
 
-  const [code, setCode] = useState("/*write your code here !!!*/");
-  const [language, setLanguage] = useState("javascript");
+  const [files, setFiles] = useState([{ id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }]);
+  const [activeFile, setActiveFile] = useState('default');
   const [theme, setTheme] = useState("vs-dark");
   const [wordWrap, setWordWrap] = useState("on");
   const [messages, setMessages] = useState([]);
   const [chatInput, setChatInput] = useState("");
-  // Store remote cursors: { [socketId]: { username, color, lineNumber, column } }
+  // Store remote cursors: { [socketId]: { username, color, lineNumber, column, fileId } }
   const [remoteCursors, setRemoteCursors] = useState({});
   const [isApproved, setIsApproved] = useState(false);
 
   const username = location.state?.username;
 
-  // Language mapping for Monaco
-  const languageOptions = [
-    { value: "javascript", label: "JavaScript" },
-    { value: "python", label: "Python" },
-    { value: "java", label: "Java" },
-    { value: "cpp", label: "C++" },
-    { value: "typescript", label: "TypeScript" },
-    { value: "html", label: "HTML" },
-    { value: "css", label: "CSS" },
-    { value: "json", label: "JSON" },
-    { value: "go", label: "Go" },
-    { value: "rust", label: "Rust" },
-    { value: "php", label: "PHP" },
-    { value: "sql", label: "SQL" },
-    { value: "csharp", label: "C#" },
-    { value: "swift", label: "Swift" },
-    { value: "ruby", label: "Ruby" },
-  ];
+  // Get current active file data
+  const currentFile = files.find(f => f.id === activeFile) || files[0];
+  const code = currentFile?.code || '';
+  const language = currentFile?.language || 'javascript';
 
   const themeOptions = [
     { value: "vs-dark", label: "VS Dark" },
@@ -64,6 +57,11 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
     { value: "dracula", label: "Dracula" },
     { value: "monokai", label: "Monokai" },
     { value: "github-dark", label: "GitHub Dark" },
+    { value: "night-owl", label: "Night Owl" },
+    { value: "nord", label: "Nord" },
+    { value: "solarized-dark", label: "Solarized Dark" },
+    { value: "one-dark-pro", label: "One Dark Pro" },
+    { value: "cobalt2", label: "Cobalt2" },
   ];
 
   // --- Session Loading ---
@@ -74,11 +72,15 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
           `${import.meta.env.VITE_BACKEND_URL}/api/sessions/${roomId}`,
         );
         if (response.data && response.data.success !== false) {
-          setCode(response.data.code || "/*write your code here !!!*/");
-          codeRef.current =
-            response.data.code || "/*write your code here !!!*/";
-          setLanguage(response.data.language || "javascript");
-          languageRef.current = response.data.language || "javascript";
+          const loadedFiles = response.data.files || [
+            { id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }
+          ];
+          setFiles(loadedFiles);
+          filesRef.current = loadedFiles;
+          if (loadedFiles.length > 0) {
+            setActiveFile(loadedFiles[0].id);
+            activeFileRef.current = loadedFiles[0].id;
+          }
           toast.success("Session loaded!");
         } else {
           console.log("No existing session found, starting fresh");
@@ -99,22 +101,13 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
     const newDecorations = [];
 
+    // Only show cursors for users editing the same file
     Object.entries(remoteCursors).forEach(([socketId, cursorData]) => {
+      // Check if this cursor is for the current active file
+      if (cursorData.fileId !== activeFile) return;
+      
       // Need a valid position
       if (!cursorData.lineNumber || !cursorData.column) return;
-
-      // Create a style for the cursor line/position
-      // We can use className for the cursor content or glyph margin
-      // Simplest approach for "cursor" in Monaco is adding a class
-      // but Monaco doesn't support "arbitrary" HTML elements easily at text pos.
-      // We'll use:
-      // 1. className: background color for selection-like effect (or just a thin line if we can style it)
-      // 2. beforeContentClassName or afterContentClassName for the name tag
-
-      // Since we need dynamic colors, we must inject CSS or use a known set of classes.
-      // For simplicity/performance, let's inject a style tag for this user if needed,
-      // or use a predefined color class if the palette is fixed.
-      // The backend assigns colors from a palette.
 
       const cursorColor = cursorData.color || "#94A3B8";
       const cursorClass = `remote-cursor-${socketId}`;
@@ -168,7 +161,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
     );
 
     // Cleanup styles for disconnected users could be done, but minor leak for now.
-  }, [remoteCursors]);
+  }, [remoteCursors, activeFile]);
 
   // --- Socket Logic ---
   useEffect(() => {
@@ -240,8 +233,8 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
         if (socketId !== socketRef.current.id) {
           socketRef.current.emit("sync-state", {
-            code: codeRef.current,
-            language: languageRef.current,
+            files: filesRef.current,
+            activeFile: activeFileRef.current,
             socketId,
           });
         }
@@ -253,32 +246,61 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
       setUsers(clients);
     });
 
-    socketRef.current.on("code-changed", ({ code }) => {
-      if (code !== codeRef.current) {
-        isRemoteUpdate.current = true;
-        setCode(code);
-        codeRef.current = code;
+    socketRef.current.on("file-changed", ({ fileId, code: newCode }) => {
+      setFiles(prevFiles => {
+        const updatedFiles = prevFiles.map(f => 
+          f.id === fileId ? { ...f, code: newCode } : f
+        );
+        filesRef.current = updatedFiles;
+        return updatedFiles;
+      });
+      isRemoteUpdate.current = true;
+    });
+
+    socketRef.current.on("files-synced", ({ files: syncedFiles, activeFile: syncedActiveFile }) => {
+      isRemoteUpdate.current = true;
+      setFiles(syncedFiles);
+      filesRef.current = syncedFiles;
+      if (syncedActiveFile) {
+        setActiveFile(syncedActiveFile);
+        activeFileRef.current = syncedActiveFile;
       }
     });
 
-    socketRef.current.on("sync-state", ({ code, language: syncedLanguage }) => {
-      isRemoteUpdate.current = true;
-      setCode(code);
-      codeRef.current = code;
-      if (syncedLanguage) {
-        setLanguage(syncedLanguage);
-        languageRef.current = syncedLanguage;
-      }
+    socketRef.current.on("file-created", ({ file: newFile }) => {
+      setFiles(prevFiles => {
+        const updatedFiles = [...prevFiles, newFile];
+        filesRef.current = updatedFiles;
+        return updatedFiles;
+      });
     });
+
+    socketRef.current.on("file-deleted", ({ fileId }) => {
+      setFiles(prevFiles => {
+        const updatedFiles = prevFiles.filter(f => f.id !== fileId);
+        filesRef.current = updatedFiles;
+        // If active file was deleted, switch to first file
+        if (activeFileRef.current === fileId && updatedFiles.length > 0) {
+          setActiveFile(updatedFiles[0].id);
+          activeFileRef.current = updatedFiles[0].id;
+        }
+        return updatedFiles;
+      });
+    });
+
+    socketRef.current.on("file-renamed", ({ fileId, newName }) => {
+      setFiles(prevFiles => {
+        const updatedFiles = prevFiles.map(f =>
+          f.id === fileId ? { ...f, name: newName, language: getLanguageFromFilename(newName) } : f
+        );
+        filesRef.current = updatedFiles;
+        return updatedFiles;
+      });
+    });
+
     socketRef.current.on("removed-by-admin", () => {
       toast.error("You were removed by the admin.");
       navigate("/");
-    });
-
-    socketRef.current.on("language-changed", ({ language: newLanguage }) => {
-      if (!newLanguage) return;
-      setLanguage(newLanguage);
-      languageRef.current = newLanguage;
     });
 
     socketRef.current.on(
@@ -299,10 +321,10 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
     socketRef.current.on(
       "cursor-change",
-      ({ socketId, cursor, username: cursorUser, color }) => {
+      ({ socketId, cursor, username: cursorUser, color, fileId }) => {
         setRemoteCursors((prev) => ({
           ...prev,
-          [socketId]: { ...cursor, username: cursorUser, color },
+          [socketId]: { ...cursor, username: cursorUser, color, fileId },
         }));
       },
     );
@@ -333,6 +355,95 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
 
   // --- Handlers ---
+  
+  // File Management Handlers
+  const handleFileSelect = (fileId) => {
+    setActiveFile(fileId);
+    activeFileRef.current = fileId;
+  };
+
+  const handleFileCreate = (filename) => {
+    if (!isValidFilename(filename)) {
+      toast.error('Invalid filename');
+      return;
+    }
+
+    // Check if file already exists
+    if (files.some(f => f.name === filename)) {
+      toast.error('File already exists');
+      return;
+    }
+
+    const fileId = generateFileId();
+    const language = getLanguageFromFilename(filename);
+    const newFile = {
+      id: fileId,
+      name: filename,
+      code: getDefaultTemplate(language, filename),
+      language,
+    };
+
+    const updatedFiles = [...files, newFile];
+    setFiles(updatedFiles);
+    filesRef.current = updatedFiles;
+    setActiveFile(fileId);
+    activeFileRef.current = fileId;
+
+    socketRef.current?.emit("file-create", {
+      roomId,
+      file: newFile,
+    });
+
+    toast.success(`Created ${filename}`);
+  };
+
+  const handleFileDelete = (fileId) => {
+    if (files.length === 1) {
+      toast.error('Cannot delete the last file');
+      return;
+    }
+
+    const updatedFiles = files.filter(f => f.id !== fileId);
+    setFiles(updatedFiles);
+    filesRef.current = updatedFiles;
+
+    // If active file was deleted, switch to first file
+    if (activeFile === fileId) {
+      setActiveFile(updatedFiles[0].id);
+      activeFileRef.current = updatedFiles[0].id;
+    }
+
+    socketRef.current?.emit("file-delete", {
+      roomId,
+      fileId,
+    });
+  };
+
+  const handleFileRename = (fileId, newName) => {
+    if (!isValidFilename(newName)) {
+      toast.error('Invalid filename');
+      return;
+    }
+
+    // Check if file already exists
+    if (files.some(f => f.name === newName && f.id !== fileId)) {
+      toast.error('File already exists');
+      return;
+    }
+
+    const language = getLanguageFromFilename(newName);
+    const updatedFiles = files.map(f =>
+      f.id === fileId ? { ...f, name: newName, language } : f
+    );
+    setFiles(updatedFiles);
+    filesRef.current = updatedFiles;
+
+    socketRef.current?.emit("file-rename", {
+      roomId,
+      fileId,
+      newName,
+    });
+  };
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -351,6 +462,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
         cursor,
         username,
         color: selfColorRef.current,
+        fileId: activeFile,
       });
     });
   };
@@ -362,22 +474,16 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
       return;
     }
 
-    codeRef.current = value;
-    setCode(value);
+    const updatedFiles = files.map(f =>
+      f.id === activeFile ? { ...f, code: value } : f
+    );
+    setFiles(updatedFiles);
+    filesRef.current = updatedFiles;
 
-    socketRef.current?.emit("code-change", {
+    socketRef.current?.emit("file-change", {
       roomId,
+      fileId: activeFile,
       code: value,
-    });
-  };
-
-  const handleLanguageChange = (newLanguage) => {
-    setLanguage(newLanguage);
-    languageRef.current = newLanguage;
-
-    socketRef.current?.emit("language-change", {
-      roomId,
-      language: newLanguage,
     });
   };
 
@@ -410,6 +516,11 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
     monaco.editor.defineTheme("dracula", customThemes.dracula);
     monaco.editor.defineTheme("monokai", customThemes.monokai);
     monaco.editor.defineTheme("github-dark", customThemes["github-dark"]);
+    monaco.editor.defineTheme("night-owl", customThemes["night-owl"]);
+    monaco.editor.defineTheme("nord", customThemes.nord);
+    monaco.editor.defineTheme("solarized-dark", customThemes["solarized-dark"]);
+    monaco.editor.defineTheme("one-dark-pro", customThemes["one-dark-pro"]);
+    monaco.editor.defineTheme("cobalt2", customThemes.cobalt2);
   };
 
   const handleSendMessage = (event) => {
@@ -439,16 +550,11 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
     <div className="h-full w-full flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4 text-sm text-white">
         <div className="flex items-center gap-3">
-          <span className="text-zinc-300">Language:</span>
-          <div className="w-48">
-            <Select
-              options={languageOptions}
-              value={language}
-              onChange={handleLanguageChange}
-              placeholder="Select Language"
-            />
-          </div>
-          <span className="text-zinc-300 ml-2">Theme:</span>
+          <span className="text-zinc-400">Current File:</span>
+          <span className="font-medium text-white">{currentFile?.name}</span>
+          <span className="text-zinc-500">•</span>
+          <span className="text-zinc-400 text-xs">{language}</span>
+          <span className="text-zinc-300 ml-4">Theme:</span>
           <div className="w-48">
             <Select
               options={themeOptions}
@@ -508,6 +614,15 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
       </div>
 
       <div className="flex flex-1 gap-4 overflow-hidden">
+        <FileExplorer
+          files={files}
+          activeFile={activeFile}
+          onFileSelect={handleFileSelect}
+          onFileCreate={handleFileCreate}
+          onFileDelete={handleFileDelete}
+          onFileRename={handleFileRename}
+        />
+        
         <div className="flex-1 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
           <Editor
             height="100%"
