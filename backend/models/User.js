@@ -24,6 +24,11 @@ const userSchema = new mongoose.Schema({
         type: String,
         sparse: true,
         unique: true
+    },
+    githubId: {
+        type: String,
+        sparse: true,
+        unique: true
     }
 }, { timestamps: true });
 
