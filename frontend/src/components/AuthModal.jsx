@@ -69,8 +69,8 @@ const AuthModal = ({ isOpen, onClose }) => {
       <div className="flex p-1 bg-zinc-800/50 rounded-xl mb-6">
         <button
           className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "login"
-              ? "bg-indigo-600 text-white shadow-lg"
-              : "text-zinc-400 hover:text-white"
+            ? "bg-indigo-600 text-white shadow-lg"
+            : "text-zinc-400 hover:text-white"
             }`}
           onClick={() => switchTab("login")}
         >
@@ -78,8 +78,8 @@ const AuthModal = ({ isOpen, onClose }) => {
         </button>
         <button
           className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${activeTab === "signup"
-              ? "bg-indigo-600 text-white shadow-lg"
-              : "text-zinc-400 hover:text-white"
+            ? "bg-indigo-600 text-white shadow-lg"
+            : "text-zinc-400 hover:text-white"
             }`}
           onClick={() => switchTab("signup")}
         >
@@ -141,6 +141,20 @@ const AuthModal = ({ isOpen, onClose }) => {
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
             </button>
           </div>
+          {activeTab === "login" && (
+            <div className="flex justify-end mt-1">
+              <button
+                type="button"
+                className="text-sm text-indigo-400 hover:text-indigo-300 transition-colors"
+                onClick={() => {
+                  onClose();
+                  window.location.href = '/forgot-password'; // Simplified navigation since Modal is likely outside Routes or imported in Home without a full setup
+                }}
+              >
+                Forgot Password?
+              </button>
+            </div>
+          )}
         </div>
 
         {activeTab === "signup" && (

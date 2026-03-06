@@ -29,6 +29,12 @@ const userSchema = new mongoose.Schema({
         type: String,
         sparse: true,
         unique: true
+    },
+    resetPasswordOTP: {
+        type: String,
+    },
+    resetPasswordOTPExpiry: {
+        type: Date,
     }
 }, { timestamps: true });
 

@@ -113,9 +113,23 @@ PORT=3000
 MONGO_URI=mongodb://username:password@localhost:27017/codefuse
 JWT_SECRET=your_jwt_secret_key
 CLIENT_URL=http://localhost:5173
+
+# Configure Google oauth
 GOOGLE_CLIENT_ID=google_client_id
 GOOGLE_CLIENT_SECRET=google_client_secret
 GOOGLE_REDIRECT_URI=http://localhost:3000/api/oauth/callback/google
+
+# Configure Github oauth
+GITHUB_CLIENT_ID=github_client_id
+GITHUB_CLIENT_SECRET=github_client_secret
+GITHUB_REDIRECT_URI=http://localhost:3000/api/oauth/callback/github
+
+# Configure SMTP for email
+SUPPROT_EMAIL=your_email
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=465
+SMTP_USER=your_email
+SMTP_PASS='your_app_password'
 
 ```
 
