@@ -4,14 +4,18 @@ import { initSocket } from "../socket";
 import { useLocation, useParams, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import axios from "axios";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import Select from "./Select";
 import FileExplorer from "./FileExplorer";
 import { customThemes } from "../constants/customThemes";
-import { 
-  getLanguageFromFilename, 
-  generateFileId, 
+import {
+  getLanguageFromFilename,
+  generateFileId,
   isValidFilename,
-  getDefaultTemplate 
+  getDefaultTemplate
 } from "../utils/fileUtils";
 
 // Load Monaco from CDN (optional, but good for performance)
@@ -19,7 +23,7 @@ loader.config({
   paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" },
 });
 
-const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => {
+const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeContextRef }) => {
   const socketRef = useRef(null);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -50,6 +54,13 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
   const currentFile = files.find(f => f.id === activeFile) || files[0];
   const code = currentFile?.code || '';
   const language = currentFile?.language || 'javascript';
+
+  // Update outer ref for Ask AI Panel
+  useEffect(() => {
+    if (codeContextRef) {
+      codeContextRef.current = code;
+    }
+  }, [code, codeContextRef]);
 
   const themeOptions = [
     { value: "vs-dark", label: "VS Dark" },
@@ -105,7 +116,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
     Object.entries(remoteCursors).forEach(([socketId, cursorData]) => {
       // Check if this cursor is for the current active file
       if (cursorData.fileId !== activeFile) return;
-      
+
       // Need a valid position
       if (!cursorData.lineNumber || !cursorData.column) return;
 
@@ -248,7 +259,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
     socketRef.current.on("file-changed", ({ fileId, code: newCode }) => {
       setFiles(prevFiles => {
-        const updatedFiles = prevFiles.map(f => 
+        const updatedFiles = prevFiles.map(f =>
           f.id === fileId ? { ...f, code: newCode } : f
         );
         filesRef.current = updatedFiles;
@@ -355,7 +366,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
 
 
   // --- Handlers ---
-  
+
   // File Management Handlers
   const handleFileSelect = (fileId) => {
     setActiveFile(fileId);
@@ -622,7 +633,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
           onFileDelete={handleFileDelete}
           onFileRename={handleFileRename}
         />
-        
+
         <div className="flex-1 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
           <Editor
             height="100%"
@@ -668,7 +679,32 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
                 <div
                   className={`rounded-lg px-3 py-2 ${msg.username === username ? "bg-indigo-600" : "bg-zinc-800"}`}
                 >
-                  {msg.message}
+                  <div className="prose prose-invert prose-sm max-w-none prose-p:leading-snug prose-p:my-1 prose-pre:my-1 prose-pre:bg-zinc-950/50">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        code({ node, inline, className, children, ...props }) {
+                          const match = /language-(\w+)/.exec(className || '')
+                          return !inline && match ? (
+                            <SyntaxHighlighter
+                              {...props}
+                              children={String(children).replace(/\n$/, '')}
+                              style={vscDarkPlus}
+                              language={match[1]}
+                              PreTag="div"
+                              className="rounded-md my-2! bg-zinc-950!"
+                            />
+                          ) : (
+                            <code {...props} className={`${className} bg-zinc-900 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs`}>
+                              {children}
+                            </code>
+                          )
+                        }
+                      }}
+                    >
+                      {msg.message}
+                    </ReactMarkdown>
+                  </div>
                 </div>
               </div>
             ))}
@@ -678,11 +714,17 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests }) => 
             className="p-3 border-t border-zinc-700"
           >
             <div className="flex gap-2">
-              <input
+              <textarea
                 value={chatInput}
                 onChange={(event) => setChatInput(event.target.value)}
-                placeholder="Type a message..."
-                className="flex-1 rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm"
+                placeholder="Type a message... (Markdown supported)"
+                className="flex-1 rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none h-10 min-h-10 max-h-32"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
               />
               <button
                 type="submit"

@@ -10,6 +10,7 @@ import cookieParser from "cookie-parser";
 import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import oauthRoutes from "./routes/oAuthRoutes.js";
+import aiRoutes from "./routes/aiRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -46,6 +47,7 @@ app.use(express.json());
 // Routes
 app.use("/api/users", userRoutes);
 app.use("/api/oauth", oauthRoutes);
+app.use("/api/ai", aiRoutes);
 
 // serve frontend
 app.use(express.static(path.join(__dirname, "public")));
@@ -200,26 +202,26 @@ io.on("connection", (socket) => {
   });
 
   socket.on("approve-user", ({ roomId, socketId }) => {
-  const room = roomAccessControl[roomId];
-  if (!room) return;
+    const room = roomAccessControl[roomId];
+    if (!room) return;
 
-  if (socket.id !== room.adminSocketId) return; // only admin allowed
+    if (socket.id !== room.adminSocketId) return; // only admin allowed
 
-  room.pending.delete(socketId);
-  room.participants.add(socketId);
+    room.pending.delete(socketId);
+    room.participants.add(socketId);
 
-  io.sockets.sockets.get(socketId)?.join(roomId);
+    io.sockets.sockets.get(socketId)?.join(roomId);
 
-  io.to(socketId).emit("join-approved", { isAdmin: false });
+    io.to(socketId).emit("join-approved", { isAdmin: false });
 
-  const clients = getAllConnectedClients(roomId);
+    const clients = getAllConnectedClients(roomId);
 
-  io.to(roomId).emit("joined", {
-    clients,
-    username: userSocketMap[socketId]?.username,
-    socketId,
+    io.to(roomId).emit("joined", {
+      clients,
+      username: userSocketMap[socketId]?.username,
+      socketId,
+    });
   });
-});
 
 
   socket.on("deny-user", ({ roomId, socketId }) => {
@@ -234,28 +236,28 @@ io.on("connection", (socket) => {
   });
 
   socket.on("remove-user", ({ roomId, socketId }) => {
-  const room = roomAccessControl[roomId];
-  if (!room) return;
+    const room = roomAccessControl[roomId];
+    if (!room) return;
 
-  if (socket.id !== room.adminSocketId) return;
+    if (socket.id !== room.adminSocketId) return;
 
-  // Remove from participants
-  room.participants.delete(socketId);
+    // Remove from participants
+    room.participants.delete(socketId);
 
-  // Force leave room
-  io.sockets.sockets.get(socketId)?.leave(roomId);
+    // Force leave room
+    io.sockets.sockets.get(socketId)?.leave(roomId);
 
-  // Notify removed user
-  io.to(socketId).emit("removed-by-admin");
-  const clients = getAllConnectedClients(roomId);
+    // Notify removed user
+    io.to(socketId).emit("removed-by-admin");
+    const clients = getAllConnectedClients(roomId);
 
-  io.to(roomId).emit("disconnected", {
-    socketId,
-    username: userSocketMap[socketId]?.username,
-    clients,
-    color: userSocketMap[socketId]?.color,
+    io.to(roomId).emit("disconnected", {
+      socketId,
+      username: userSocketMap[socketId]?.username,
+      clients,
+      color: userSocketMap[socketId]?.color,
+    });
   });
-});
 
 
   socket.on("disconnecting", () => {

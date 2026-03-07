@@ -1,12 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import editorimg from "../assets/editor.svg";
 import User from "../components/User";
 import CodeEditor from "../components/Editor";
 import CodeMirrorEditor from "../components/CodeMirrorEditor";
 import SessionManager from "../components/SessionManager";
 import AuthModal from "../components/AuthModal";
+import AskAiPanel from "../components/AskAiPanel";
 import { toast } from "react-toastify";
 import { useNavigate, useParams } from "react-router-dom";
+import { Bot } from "lucide-react";
 
 const EditorPage = () => {
   const [user, setUser] = useState(null);
@@ -15,11 +17,13 @@ const EditorPage = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [socketRef, setSocketRef] = useState(null);
+  const [isAiPanelOpen, setIsAiPanelOpen] = useState(false);
 
   const [joinRequests, setJoinRequests] = useState([]);
 
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const codeContextRef = useRef('');
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -80,7 +84,7 @@ const EditorPage = () => {
                     socketRef.emit("approve-user", {
                       roomId,
                       socketId: req.socketId,
-              
+
                     });
 
                     setJoinRequests((prev) =>
@@ -199,6 +203,14 @@ const EditorPage = () => {
           </button>
 
           <button
+            onClick={() => setIsAiPanelOpen(true)}
+            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-emerald-500/20"
+          >
+            <Bot className="w-5 h-5" />
+            Ask AI
+          </button>
+
+          <button
             onClick={() => setShowSessionManager(true)}
             className="w-full flex items-center justify-center gap-2 bg-purple-600 hover:bg-purple-500 text-white py-3 rounded-xl font-semibold transition-all duration-200 shadow-lg shadow-purple-500/20"
           >
@@ -261,15 +273,22 @@ const EditorPage = () => {
 
       {/* right editor */}
       <div className="bg-zinc-900 flex-1 p-6 flex flex-col h-full overflow-hidden">
-        <div className="flex-1 overflow-hidden">
-          <CodeEditor
-            setUsers={setUsers}
-            setIsAdmin={setIsAdmin}
-            setSocketRef={setSocketRef}
-            setJoinRequests={setJoinRequests}
-          />
+        <div className="flex-1 flex gap-4 overflow-hidden">
+          <div className="flex-1 overflow-hidden">
+            <CodeEditor
+              setUsers={setUsers}
+              setIsAdmin={setIsAdmin}
+              setSocketRef={setSocketRef}
+              setJoinRequests={setJoinRequests}
+              codeContextRef={codeContextRef}
+            />
+          </div>
 
-          {/* or <CodeMirrorEditor /> */}
+          <AskAiPanel
+            isOpen={isAiPanelOpen}
+            onClose={() => setIsAiPanelOpen(false)}
+            getCodeContext={() => codeContextRef.current}
+          />
         </div>
       </div>
 
