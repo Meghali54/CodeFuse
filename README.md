@@ -131,6 +131,9 @@ SMTP_PORT=465
 SMTP_USER=your_email
 SMTP_PASS='your_app_password'
 
+# Configure Gemini ai
+GEMINI_API_KEY=your_gemini_api_key
+
 ```
 
 **Frontend** (create `.env` in `frontend/` folder)
