@@ -5,6 +5,7 @@ import CodeEditor from "../components/Editor";
 import CodeMirrorEditor from "../components/CodeMirrorEditor";
 import SessionManager from "../components/SessionManager";
 import AuthModal from "../components/AuthModal";
+import VoiceChat from "../components/VoiceChat";
 import { toast } from "react-toastify";
 import { useNavigate, useParams } from "react-router-dom";
 
@@ -15,6 +16,7 @@ const EditorPage = () => {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [socketRef, setSocketRef] = useState(null);
+  const [speakingUsers, setSpeakingUsers] = useState({}); // { socketId: boolean }
 
   const [joinRequests, setJoinRequests] = useState([]);
 
@@ -27,6 +29,20 @@ const EditorPage = () => {
       setUser(JSON.parse(storedUser));
     }
   }, []);
+
+  useEffect(() => {
+    if (!socketRef) return;
+
+    const handleSpeakingStatus = ({ socketId, isSpeaking }) => {
+      setSpeakingUsers((prev) => ({ ...prev, [socketId]: isSpeaking }));
+    };
+
+    socketRef.on("voice-speaking-status", handleSpeakingStatus);
+
+    return () => {
+      socketRef.off("voice-speaking-status", handleSpeakingStatus);
+    };
+  }, [socketRef]);
 
   const handleCopyRoomId = async () => {
     await navigator.clipboard.writeText(roomId);
@@ -80,7 +96,7 @@ const EditorPage = () => {
                     socketRef.emit("approve-user", {
                       roomId,
                       socketId: req.socketId,
-              
+
                     });
 
                     setJoinRequests((prev) =>
@@ -148,6 +164,7 @@ const EditorPage = () => {
                   mySocketId={socketRef?.id}
                   isAdmin={isAdmin}
                   onKick={kickUser}
+                  isSpeaking={speakingUsers[user.socketId]}
                 />
               ))}
             </div>
@@ -284,6 +301,15 @@ const EditorPage = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {socketRef && (
+        <VoiceChat
+          roomId={roomId}
+          socket={socketRef}
+          username={user?.username || "Guest"}
+          users={users}
+        />
+      )}
     </div>
   );
 };

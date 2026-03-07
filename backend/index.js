@@ -200,26 +200,26 @@ io.on("connection", (socket) => {
   });
 
   socket.on("approve-user", ({ roomId, socketId }) => {
-  const room = roomAccessControl[roomId];
-  if (!room) return;
+    const room = roomAccessControl[roomId];
+    if (!room) return;
 
-  if (socket.id !== room.adminSocketId) return; // only admin allowed
+    if (socket.id !== room.adminSocketId) return; // only admin allowed
 
-  room.pending.delete(socketId);
-  room.participants.add(socketId);
+    room.pending.delete(socketId);
+    room.participants.add(socketId);
 
-  io.sockets.sockets.get(socketId)?.join(roomId);
+    io.sockets.sockets.get(socketId)?.join(roomId);
 
-  io.to(socketId).emit("join-approved", { isAdmin: false });
+    io.to(socketId).emit("join-approved", { isAdmin: false });
 
-  const clients = getAllConnectedClients(roomId);
+    const clients = getAllConnectedClients(roomId);
 
-  io.to(roomId).emit("joined", {
-    clients,
-    username: userSocketMap[socketId]?.username,
-    socketId,
+    io.to(roomId).emit("joined", {
+      clients,
+      username: userSocketMap[socketId]?.username,
+      socketId,
+    });
   });
-});
 
 
   socket.on("deny-user", ({ roomId, socketId }) => {
@@ -234,28 +234,28 @@ io.on("connection", (socket) => {
   });
 
   socket.on("remove-user", ({ roomId, socketId }) => {
-  const room = roomAccessControl[roomId];
-  if (!room) return;
+    const room = roomAccessControl[roomId];
+    if (!room) return;
 
-  if (socket.id !== room.adminSocketId) return;
+    if (socket.id !== room.adminSocketId) return;
 
-  // Remove from participants
-  room.participants.delete(socketId);
+    // Remove from participants
+    room.participants.delete(socketId);
 
-  // Force leave room
-  io.sockets.sockets.get(socketId)?.leave(roomId);
+    // Force leave room
+    io.sockets.sockets.get(socketId)?.leave(roomId);
 
-  // Notify removed user
-  io.to(socketId).emit("removed-by-admin");
-  const clients = getAllConnectedClients(roomId);
+    // Notify removed user
+    io.to(socketId).emit("removed-by-admin");
+    const clients = getAllConnectedClients(roomId);
 
-  io.to(roomId).emit("disconnected", {
-    socketId,
-    username: userSocketMap[socketId]?.username,
-    clients,
-    color: userSocketMap[socketId]?.color,
+    io.to(roomId).emit("disconnected", {
+      socketId,
+      username: userSocketMap[socketId]?.username,
+      clients,
+      color: userSocketMap[socketId]?.color,
+    });
   });
-});
 
 
   socket.on("disconnecting", () => {
@@ -376,6 +376,33 @@ io.on("connection", (socket) => {
       username,
       color,
       fileId,
+    });
+  });
+  // Voice Chat signaling
+  socket.on("voice-join", ({ roomId, username }) => {
+    socket.to(roomId).emit("voice-user-joined", {
+      socketId: socket.id,
+      username,
+    });
+  });
+
+  socket.on("voice-leave", ({ roomId }) => {
+    socket.to(roomId).emit("voice-user-left", {
+      socketId: socket.id,
+    });
+  });
+
+  socket.on("voice-signal", ({ roomId, targetId, signal }) => {
+    io.to(targetId).emit("voice-signal", {
+      senderId: socket.id,
+      signal,
+    });
+  });
+
+  socket.on("voice-speaking-status", ({ roomId, isSpeaking }) => {
+    socket.to(roomId).emit("voice-speaking-status", {
+      socketId: socket.id,
+      isSpeaking,
     });
   });
 });
