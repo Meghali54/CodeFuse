@@ -6,7 +6,7 @@ const User = (props) => {
   return (
     <div className="flex flex-col gap-1 text-white items-center">
       <div className="relative w-fit">
-        <Avatar name={props.username} size='60' className="rounded-xl " />
+        <Avatar name={props.username} size='60' className={`rounded-xl transition-all duration-300 ${props.isSpeaking ? 'ring-4 ring-green-500 animate-pulse' : ''}`} />
         <span
           className="absolute -bottom-1 -right-1 h-3 w-3 rounded-full border border-zinc-900"
           style={{ backgroundColor: props.color || "#94A3B8" }}
@@ -25,7 +25,7 @@ const User = (props) => {
 
       <span className='username'>{props.username}</span>
     </div>
-  ) 
+  )
 }
 
 export default User

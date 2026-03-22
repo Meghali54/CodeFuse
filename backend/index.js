@@ -401,6 +401,33 @@ io.on("connection", (socket) => {
       fileId,
     });
   });
+  // Voice Chat signaling
+  socket.on("voice-join", ({ roomId, username }) => {
+    socket.to(roomId).emit("voice-user-joined", {
+      socketId: socket.id,
+      username,
+    });
+  });
+
+  socket.on("voice-leave", ({ roomId }) => {
+    socket.to(roomId).emit("voice-user-left", {
+      socketId: socket.id,
+    });
+  });
+
+  socket.on("voice-signal", ({ roomId, targetId, signal }) => {
+    io.to(targetId).emit("voice-signal", {
+      senderId: socket.id,
+      signal,
+    });
+  });
+
+  socket.on("voice-speaking-status", ({ roomId, isSpeaking }) => {
+    socket.to(roomId).emit("voice-speaking-status", {
+      socketId: socket.id,
+      isSpeaking,
+    });
+  });
 });
 
 // Fallback for unknown routes - helpful for users accessing backend port by mistake

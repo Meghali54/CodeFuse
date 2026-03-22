@@ -32,6 +32,20 @@ const EditorPage = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!socketRef) return;
+
+    const handleSpeakingStatus = ({ socketId, isSpeaking }) => {
+      setSpeakingUsers((prev) => ({ ...prev, [socketId]: isSpeaking }));
+    };
+
+    socketRef.on("voice-speaking-status", handleSpeakingStatus);
+
+    return () => {
+      socketRef.off("voice-speaking-status", handleSpeakingStatus);
+    };
+  }, [socketRef]);
+
   const handleCopyRoomId = async () => {
     await navigator.clipboard.writeText(roomId);
     toast.success(`Room id copied`);
@@ -152,6 +166,7 @@ const EditorPage = () => {
                   mySocketId={socketRef?.id}
                   isAdmin={isAdmin}
                   onKick={kickUser}
+                  isSpeaking={speakingUsers[user.socketId]}
                 />
               ))}
             </div>
@@ -303,6 +318,15 @@ const EditorPage = () => {
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
       />
+
+      {socketRef && (
+        <VoiceChat
+          roomId={roomId}
+          socket={socketRef}
+          username={user?.username || "Guest"}
+          users={users}
+        />
+      )}
     </div>
   );
 };
