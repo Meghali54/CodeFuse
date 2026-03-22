@@ -1,13 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import Editor, { loader } from "@monaco-editor/react";
 import { initSocket } from "../socket";
-import { useLocation, useParams, Navigate, useNavigate } from "react-router-dom";
+import {
+  useLocation,
+  useParams,
+  Navigate,
+  useNavigate,
+} from "react-router-dom";
 import { toast } from "react-toastify";
 import axios from "axios";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
 import Select from "./Select";
 import FileExplorer from "./FileExplorer";
 import { customThemes } from "../constants/customThemes";
@@ -15,7 +20,7 @@ import {
   getLanguageFromFilename,
   generateFileId,
   isValidFilename,
-  getDefaultTemplate
+  getDefaultTemplate,
 } from "../utils/fileUtils";
 
 // Load Monaco from CDN (optional, but good for performance)
@@ -23,7 +28,13 @@ loader.config({
   paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" },
 });
 
-const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeContextRef }) => {
+const CodeEditor = ({
+  setUsers,
+  setIsAdmin,
+  setSocketRef,
+  setJoinRequests,
+  codeContextRef,
+}) => {
   const socketRef = useRef(null);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
@@ -33,13 +44,31 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
 
   // Refs for mute/state management to prevent loops
   const isRemoteUpdate = useRef(false);
-  const filesRef = useRef([{ id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }]);
-  const activeFileRef = useRef('default');
+  const filesRef = useRef([
+    {
+      id: "default",
+      name: "main.js",
+      code: "// Write your code here",
+      language: "javascript",
+      type: "file",
+      parentId: null,
+    },
+  ]);
+  const activeFileRef = useRef("default");
   const decorationsRef = useRef([]);
   const selfColorRef = useRef("#94A3B8");
 
-  const [files, setFiles] = useState([{ id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }]);
-  const [activeFile, setActiveFile] = useState('default');
+  const [files, setFiles] = useState([
+    {
+      id: "default",
+      name: "main.js",
+      code: "// Write your code here",
+      language: "javascript",
+      type: "file",
+      parentId: null,
+    },
+  ]);
+  const [activeFile, setActiveFile] = useState("default");
   const [theme, setTheme] = useState("vs-dark");
   const [wordWrap, setWordWrap] = useState("on");
   const [messages, setMessages] = useState([]);
@@ -47,13 +76,16 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
   // Store remote cursors: { [socketId]: { username, color, lineNumber, column, fileId } }
   const [remoteCursors, setRemoteCursors] = useState({});
   const [isApproved, setIsApproved] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importUrl, setImportUrl] = useState("");
+  const [isImporting, setIsImporting] = useState(false);
 
   const username = location.state?.username;
 
   // Get current active file data
-  const currentFile = files.find(f => f.id === activeFile) || files[0];
-  const code = currentFile?.code || '';
-  const language = currentFile?.language || 'javascript';
+  const currentFile = files.find((f) => f.id === activeFile) || files[0];
+  const code = currentFile?.code || "";
+  const language = currentFile?.language || "javascript";
 
   // Update outer ref for Ask AI Panel
   useEffect(() => {
@@ -84,7 +116,14 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
         );
         if (response.data && response.data.success !== false) {
           const loadedFiles = response.data.files || [
-            { id: 'default', name: 'main.js', code: '// Write your code here', language: 'javascript' }
+            {
+              id: "default",
+              name: "main.js",
+              code: "// Write your code here",
+              language: "javascript",
+              type: "file",
+              parentId: null,
+            },
           ];
           setFiles(loadedFiles);
           filesRef.current = loadedFiles;
@@ -214,7 +253,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
       setIsAdmin(isAdmin);
     });
     socketRef.current.on("join-request", ({ username, socketId }) => {
-      console.log("JOin request received", username)
+      console.log("JOin request received", username);
       setJoinRequests((prev) => [...prev, { username, socketId }]);
     });
 
@@ -258,9 +297,9 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
     });
 
     socketRef.current.on("file-changed", ({ fileId, code: newCode }) => {
-      setFiles(prevFiles => {
-        const updatedFiles = prevFiles.map(f =>
-          f.id === fileId ? { ...f, code: newCode } : f
+      setFiles((prevFiles) => {
+        const updatedFiles = prevFiles.map((f) =>
+          f.id === fileId ? { ...f, code: newCode } : f,
         );
         filesRef.current = updatedFiles;
         return updatedFiles;
@@ -268,42 +307,71 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
       isRemoteUpdate.current = true;
     });
 
-    socketRef.current.on("files-synced", ({ files: syncedFiles, activeFile: syncedActiveFile }) => {
-      isRemoteUpdate.current = true;
-      setFiles(syncedFiles);
-      filesRef.current = syncedFiles;
-      if (syncedActiveFile) {
-        setActiveFile(syncedActiveFile);
-        activeFileRef.current = syncedActiveFile;
-      }
-    });
+    socketRef.current.on(
+      "files-synced",
+      ({ files: syncedFiles, activeFile: syncedActiveFile }) => {
+        isRemoteUpdate.current = true;
+        setFiles(syncedFiles);
+        filesRef.current = syncedFiles;
+        if (syncedActiveFile) {
+          setActiveFile(syncedActiveFile);
+          activeFileRef.current = syncedActiveFile;
+        }
+      },
+    );
 
-    socketRef.current.on("file-created", ({ file: newFile }) => {
-      setFiles(prevFiles => {
-        const updatedFiles = [...prevFiles, newFile];
+    socketRef.current.on("item-created", ({ item: newItem }) => {
+      setFiles((prevFiles) => {
+        const updatedFiles = [...prevFiles, newItem];
         filesRef.current = updatedFiles;
         return updatedFiles;
       });
     });
 
-    socketRef.current.on("file-deleted", ({ fileId }) => {
-      setFiles(prevFiles => {
-        const updatedFiles = prevFiles.filter(f => f.id !== fileId);
+    socketRef.current.on("item-deleted", ({ itemId }) => {
+      setFiles((prevFiles) => {
+        // Find all children recursively to delete them from clients
+        const getChildrenIds = (parentId, currentFiles) => {
+          const children = currentFiles.filter((f) => f.parentId === parentId);
+          let ids = children.map((c) => c.id);
+          children.forEach((c) => {
+            ids = [...ids, ...getChildrenIds(c.id, currentFiles)];
+          });
+          return ids;
+        };
+        const idsToDelete = [itemId, ...getChildrenIds(itemId, prevFiles)];
+        const updatedFiles = prevFiles.filter(
+          (f) => !idsToDelete.includes(f.id),
+        );
         filesRef.current = updatedFiles;
+
         // If active file was deleted, switch to first file
-        if (activeFileRef.current === fileId && updatedFiles.length > 0) {
-          setActiveFile(updatedFiles[0].id);
-          activeFileRef.current = updatedFiles[0].id;
+        if (idsToDelete.includes(activeFileRef.current)) {
+          const firstFile = updatedFiles.find((f) => f.type === "file");
+          if (firstFile) {
+            setActiveFile(firstFile.id);
+            activeFileRef.current = firstFile.id;
+          }
         }
         return updatedFiles;
       });
     });
 
-    socketRef.current.on("file-renamed", ({ fileId, newName }) => {
-      setFiles(prevFiles => {
-        const updatedFiles = prevFiles.map(f =>
-          f.id === fileId ? { ...f, name: newName, language: getLanguageFromFilename(newName) } : f
-        );
+    socketRef.current.on("item-renamed", ({ itemId, newName }) => {
+      setFiles((prevFiles) => {
+        const updatedFiles = prevFiles.map((f) => {
+          if (f.id === itemId) {
+            return {
+              ...f,
+              name: newName,
+              language:
+                f.type === "file"
+                  ? getLanguageFromFilename(newName)
+                  : undefined,
+            };
+          }
+          return f;
+        });
         filesRef.current = updatedFiles;
         return updatedFiles;
       });
@@ -363,95 +431,211 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
     return <Navigate to="/" state={{ roomId }} />;
   }
 
-
-
   // --- Handlers ---
 
+  const handleImportGithub = async (e) => {
+    if (e) e.preventDefault();
+    if (!importUrl) return;
+
+    try {
+      setIsImporting(true);
+      const res = await axios.post(
+        `${import.meta.env.VITE_BACKEND_URL}/api/github/import`,
+        { repoUrl: importUrl },
+      );
+
+      const newFiles = res.data.files;
+      if (!newFiles || newFiles.length === 0) {
+        toast.error("Repository is empty or invalid.");
+        setIsImporting(false);
+        return;
+      }
+
+      setFiles(newFiles);
+      filesRef.current = newFiles;
+
+      const firstFile = newFiles.find((f) => f.type === "file");
+      if (firstFile) {
+        setActiveFile(firstFile.id);
+        activeFileRef.current = firstFile.id;
+      }
+
+      socketRef.current?.emit("broadcast-state", {
+        roomId,
+        files: newFiles,
+        activeFile: firstFile ? firstFile.id : null,
+      });
+
+      toast.success("Imported repository layout");
+      setIsImportModalOpen(false);
+      setImportUrl("");
+    } catch (err) {
+      toast.error(err.response?.data?.error || "Failed to import");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   // File Management Handlers
-  const handleFileSelect = (fileId) => {
+  const handleFileSelect = async (fileId) => {
+    const file = filesRef.current.find((f) => f.id === fileId);
+    if (!file) return;
+
+    if (file.code === null && file.githubMeta) {
+      try {
+        const { owner, repo, branch, path } = file.githubMeta;
+        const res = await axios.get(
+          `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${path}`,
+        );
+
+        const content =
+          typeof res.data === "string"
+            ? res.data
+            : JSON.stringify(res.data, null, 2);
+
+        const updatedFiles = filesRef.current.map((f) =>
+          f.id === fileId ? { ...f, code: content } : f,
+        );
+
+        setFiles(updatedFiles);
+        filesRef.current = updatedFiles;
+
+        socketRef.current?.emit("file-change", {
+          roomId,
+          fileId,
+          code: content,
+        });
+      } catch (err) {
+        toast.error("Failed to load file from GitHub");
+        return;
+      }
+    }
+
     setActiveFile(fileId);
     activeFileRef.current = fileId;
   };
 
-  const handleFileCreate = (filename) => {
-    if (!isValidFilename(filename)) {
-      toast.error('Invalid filename');
+  const handleItemCreate = (name, type, parentId) => {
+    if (!isValidFilename(name) && type === "file") {
+      toast.error("Invalid filename");
       return;
     }
 
-    // Check if file already exists
-    if (files.some(f => f.name === filename)) {
-      toast.error('File already exists');
+    if (files.some((f) => f.name === name && f.parentId === parentId)) {
+      toast.error(
+        `${type === "folder" ? "Folder" : "File"} already exists here`,
+      );
       return;
     }
 
-    const fileId = generateFileId();
-    const language = getLanguageFromFilename(filename);
-    const newFile = {
-      id: fileId,
-      name: filename,
-      code: getDefaultTemplate(language, filename),
+    const itemId = generateFileId();
+    const language =
+      type === "file" ? getLanguageFromFilename(name) : undefined;
+    const newItem = {
+      id: itemId,
+      name: name,
+      code: type === "file" ? getDefaultTemplate(language, name) : undefined,
       language,
+      type,
+      parentId,
     };
 
-    const updatedFiles = [...files, newFile];
-    setFiles(updatedFiles);
-    filesRef.current = updatedFiles;
-    setActiveFile(fileId);
-    activeFileRef.current = fileId;
-
-    socketRef.current?.emit("file-create", {
-      roomId,
-      file: newFile,
-    });
-
-    toast.success(`Created ${filename}`);
-  };
-
-  const handleFileDelete = (fileId) => {
-    if (files.length === 1) {
-      toast.error('Cannot delete the last file');
-      return;
-    }
-
-    const updatedFiles = files.filter(f => f.id !== fileId);
+    const updatedFiles = [...files, newItem];
     setFiles(updatedFiles);
     filesRef.current = updatedFiles;
 
-    // If active file was deleted, switch to first file
-    if (activeFile === fileId) {
-      setActiveFile(updatedFiles[0].id);
-      activeFileRef.current = updatedFiles[0].id;
+    if (type === "file") {
+      setActiveFile(itemId);
+      activeFileRef.current = itemId;
     }
 
-    socketRef.current?.emit("file-delete", {
+    socketRef.current?.emit("item-create", {
       roomId,
-      fileId,
+      item: newItem,
+    });
+
+    toast.success(`Created ${name}`);
+  };
+
+  const handleItemDelete = (itemId) => {
+    const itemToDelete = files.find((f) => f.id === itemId);
+    if (!itemToDelete) return;
+
+    const remainingFiles = files.filter(
+      (f) => f.type === "file" && f.id !== itemId,
+    );
+    if (itemToDelete.type === "file" && remainingFiles.length === 0) {
+      toast.error("Cannot delete the last file");
+      return;
+    }
+
+    const getChildrenIds = (parentId) => {
+      const children = files.filter((f) => f.parentId === parentId);
+      let ids = children.map((c) => c.id);
+      children.forEach((c) => {
+        ids = [...ids, ...getChildrenIds(c.id)];
+      });
+      return ids;
+    };
+
+    const idsToDelete = [itemId, ...getChildrenIds(itemId)];
+    const updatedFiles = files.filter((f) => !idsToDelete.includes(f.id));
+
+    setFiles(updatedFiles);
+    filesRef.current = updatedFiles;
+
+    if (idsToDelete.includes(activeFile)) {
+      const firstAvailableFile = updatedFiles.find((f) => f.type === "file");
+      if (firstAvailableFile) {
+        setActiveFile(firstAvailableFile.id);
+        activeFileRef.current = firstAvailableFile.id;
+      }
+    }
+
+    socketRef.current?.emit("item-delete", {
+      roomId,
+      itemId,
     });
   };
 
-  const handleFileRename = (fileId, newName) => {
-    if (!isValidFilename(newName)) {
-      toast.error('Invalid filename');
+  const handleItemRename = (itemId, newName) => {
+    const itemToRename = files.find((f) => f.id === itemId);
+    if (!itemToRename) return;
+
+    if (!isValidFilename(newName) && itemToRename.type === "file") {
+      toast.error("Invalid filename");
       return;
     }
 
-    // Check if file already exists
-    if (files.some(f => f.name === newName && f.id !== fileId)) {
-      toast.error('File already exists');
+    if (
+      files.some(
+        (f) =>
+          f.name === newName &&
+          f.parentId === itemToRename.parentId &&
+          f.id !== itemId,
+      )
+    ) {
+      toast.error(
+        `${itemToRename.type === "folder" ? "Folder" : "File"} already exists`,
+      );
       return;
     }
 
-    const language = getLanguageFromFilename(newName);
-    const updatedFiles = files.map(f =>
-      f.id === fileId ? { ...f, name: newName, language } : f
+    const language =
+      itemToRename.type === "file"
+        ? getLanguageFromFilename(newName)
+        : undefined;
+    const updatedFiles = files.map((f) =>
+      f.id === itemId
+        ? { ...f, name: newName, language: language || f.language }
+        : f,
     );
     setFiles(updatedFiles);
     filesRef.current = updatedFiles;
 
-    socketRef.current?.emit("file-rename", {
+    socketRef.current?.emit("item-rename", {
       roomId,
-      fileId,
+      itemId,
       newName,
     });
   };
@@ -485,8 +669,8 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
       return;
     }
 
-    const updatedFiles = files.map(f =>
-      f.id === activeFile ? { ...f, code: value } : f
+    const updatedFiles = files.map((f) =>
+      f.id === activeFile ? { ...f, code: value } : f,
     );
     setFiles(updatedFiles);
     filesRef.current = updatedFiles;
@@ -577,12 +761,37 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
         </div>
         <div className="flex items-center gap-1 bg-zinc-800/50 p-1 rounded-lg border border-zinc-700">
           <button
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-zinc-300 hover:text-white hover:bg-zinc-700 rounded-md transition-colors font-medium border border-zinc-700"
+            title="Import from GitHub"
+          >
+            <svg
+              className="w-3.5 h-3.5"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+            </svg>
+            Import
+          </button>
+          <div className="w-px h-4 bg-zinc-700 mx-1"></div>
+          <button
             onClick={toggleWordWrap}
             className={`p-1.5 rounded-md transition-colors ${wordWrap === "on" ? "bg-indigo-600 text-white" : "text-zinc-400 hover:text-white hover:bg-zinc-700"}`}
             title="Toggle Word Wrap"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h7"
+              />
             </svg>
           </button>
           <div className="w-px h-4 bg-zinc-700 mx-1"></div>
@@ -591,8 +800,18 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
             className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-md transition-colors"
             title="Format Code"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+              />
             </svg>
           </button>
           <div className="w-px h-4 bg-zinc-700 mx-1"></div>
@@ -601,8 +820,18 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
             className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-md transition-colors"
             title="Zoom Out"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M20 12H4"
+              />
             </svg>
           </button>
           <button
@@ -617,8 +846,18 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
             className="p-1.5 text-zinc-400 hover:text-white hover:bg-zinc-700 rounded-md transition-colors"
             title="Zoom In"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
             </svg>
           </button>
         </div>
@@ -629,9 +868,9 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
           files={files}
           activeFile={activeFile}
           onFileSelect={handleFileSelect}
-          onFileCreate={handleFileCreate}
-          onFileDelete={handleFileDelete}
-          onFileRename={handleFileRename}
+          onItemCreate={handleItemCreate}
+          onItemDelete={handleItemDelete}
+          onItemRename={handleItemRename}
         />
 
         <div className="flex-1 overflow-hidden rounded-lg border border-zinc-700 bg-zinc-900">
@@ -684,22 +923,25 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
                       remarkPlugins={[remarkGfm]}
                       components={{
                         code({ node, inline, className, children, ...props }) {
-                          const match = /language-(\w+)/.exec(className || '')
+                          const match = /language-(\w+)/.exec(className || "");
                           return !inline && match ? (
                             <SyntaxHighlighter
                               {...props}
-                              children={String(children).replace(/\n$/, '')}
+                              children={String(children).replace(/\n$/, "")}
                               style={vscDarkPlus}
                               language={match[1]}
                               PreTag="div"
                               className="rounded-md my-2! bg-zinc-950!"
                             />
                           ) : (
-                            <code {...props} className={`${className} bg-zinc-900 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs`}>
+                            <code
+                              {...props}
+                              className={`${className} bg-zinc-900 px-1 py-0.5 rounded text-indigo-300 font-mono text-xs`}
+                            >
                               {children}
                             </code>
-                          )
-                        }
+                          );
+                        },
                       }}
                     >
                       {msg.message}
@@ -720,7 +962,7 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
                 placeholder="Type a message... (Markdown supported)"
                 className="flex-1 rounded bg-zinc-800 border border-zinc-700 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 resize-none h-10 min-h-10 max-h-32"
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage(e);
                   }
@@ -736,6 +978,47 @@ const CodeEditor = ({ setUsers, setIsAdmin, setSocketRef, setJoinRequests, codeC
           </form>
         </div>
       </div>
+      {isImportModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-zinc-900 border border-zinc-700 rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-white mb-2">
+              Import from GitHub
+            </h3>
+            <p className="text-zinc-400 text-sm mb-4">
+              Enter the URL of a public GitHub repository. This will overwrite
+              your current workspace.
+            </p>
+            <form onSubmit={handleImportGithub}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="https://github.com/facebook/react"
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 text-white rounded-md px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 mb-4"
+                disabled={isImporting}
+              />
+              <div className="flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setIsImportModalOpen(false)}
+                  className="px-4 py-2 text-sm font-medium text-zinc-300 hover:text-white transition-colors"
+                  disabled={isImporting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-md transition-colors disabled:opacity-50"
+                  disabled={isImporting || !importUrl.trim()}
+                >
+                  {isImporting ? "Importing..." : "Import"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

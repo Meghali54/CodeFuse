@@ -11,6 +11,7 @@ import cors from "cors";
 import userRoutes from "./routes/userRoutes.js";
 import oauthRoutes from "./routes/oAuthRoutes.js";
 import aiRoutes from "./routes/aiRoutes.js";
+import githubRoutes from "./routes/githubRoutes.js";
 
 dotenv.config();
 const app = express();
@@ -48,6 +49,7 @@ app.use(express.json());
 app.use("/api/users", userRoutes);
 app.use("/api/oauth", oauthRoutes);
 app.use("/api/ai", aiRoutes);
+app.use("/api/github", githubRoutes);
 
 // serve frontend
 app.use(express.static(path.join(__dirname, "public")));
@@ -67,7 +69,9 @@ app.post("/api/sessions", (req, res) => {
         id: 'default',
         name: 'main.js',
         code: '// Write your code here',
-        language: 'javascript'
+        language: 'javascript',
+        type: 'file',
+        parentId: null
       }
     ],
     createdAt: new Date().toISOString(),
@@ -327,29 +331,46 @@ io.on("connection", (socket) => {
     io.to(socketId).emit("files-synced", { files, activeFile });
   });
 
-  socket.on("file-create", ({ roomId, file }) => {
-    socket.to(roomId).emit("file-created", { file });
-
+  socket.on("broadcast-state", ({ roomId, files, activeFile }) => {
+    socket.to(roomId).emit("files-synced", { files, activeFile });
     if (sessionStore[roomId]) {
-      sessionStore[roomId].files.push(file);
+      sessionStore[roomId].files = files;
       sessionStore[roomId].lastUpdated = new Date().toISOString();
     }
   });
 
-  socket.on("file-delete", ({ roomId, fileId }) => {
-    socket.to(roomId).emit("file-deleted", { fileId });
+  socket.on("item-create", ({ roomId, item }) => {
+    socket.to(roomId).emit("item-created", { item });
 
     if (sessionStore[roomId]) {
-      sessionStore[roomId].files = sessionStore[roomId].files.filter(f => f.id !== fileId);
+      sessionStore[roomId].files.push(item);
       sessionStore[roomId].lastUpdated = new Date().toISOString();
     }
   });
 
-  socket.on("file-rename", ({ roomId, fileId, newName }) => {
-    socket.to(roomId).emit("file-renamed", { fileId, newName });
+  socket.on("item-delete", ({ roomId, itemId }) => {
+    socket.to(roomId).emit("item-deleted", { itemId });
 
     if (sessionStore[roomId]) {
-      const fileIndex = sessionStore[roomId].files.findIndex(f => f.id === fileId);
+      const getChildrenIds = (parentId, files) => {
+        const children = files.filter(f => f.parentId === parentId);
+        let ids = children.map(c => c.id);
+        children.forEach(c => {
+          ids = [...ids, ...getChildrenIds(c.id, files)];
+        });
+        return ids;
+      };
+      const idsToDelete = [itemId, ...getChildrenIds(itemId, sessionStore[roomId].files)];
+      sessionStore[roomId].files = sessionStore[roomId].files.filter(f => !idsToDelete.includes(f.id));
+      sessionStore[roomId].lastUpdated = new Date().toISOString();
+    }
+  });
+
+  socket.on("item-rename", ({ roomId, itemId, newName }) => {
+    socket.to(roomId).emit("item-renamed", { itemId, newName });
+
+    if (sessionStore[roomId]) {
+      const fileIndex = sessionStore[roomId].files.findIndex(f => f.id === itemId);
       if (fileIndex !== -1) {
         sessionStore[roomId].files[fileIndex].name = newName;
         sessionStore[roomId].lastUpdated = new Date().toISOString();
